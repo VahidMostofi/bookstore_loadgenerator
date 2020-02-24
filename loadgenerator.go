@@ -68,15 +68,17 @@ func (lg *LoadGenerator) GenerateLoad(numWokers int) {
 		go lg.worker()
 	}
 
-	for r := range lg.Results {
-		lg.Requests = append(lg.Requests, r)
-		// fmt.Println(len(lg.Requests))
-		if len(lg.Requests) == requestsCount {
-			close(lg.RequestsQueue)
-			break
+	go func(){
+		for r := range lg.Results {
+			lg.Requests = append(lg.Requests, r)
+			// fmt.Println(len(lg.Requests))
+			if len(lg.Requests) == requestsCount {
+				close(lg.RequestsQueue)
+				break
+			}
 		}
-	}
-	go lg.GetStats()
+		lg.GetStats()
+	}()
 }
 
 func (lg *LoadGenerator) PrepareLoad(numUsers int, alpha int) {
