@@ -38,7 +38,7 @@ func (lg *LoadGenerator) GetGetBookRequest(name string, bookId string) *Request 
 
 func (lg *LoadGenerator) GetEditBookRequest(name string, bookId string) *Request {
 	r := Request{
-		Method:       "POST",
+		Method:       "PUT",
 		URL:          "/books/" + bookId,
 		Body:         fmt.Sprintf(`{"description":"%s","pages":%d}`, "some new description", 200+rand.Intn(200)),
 		Handle:       nil,
@@ -92,7 +92,7 @@ func (lg *LoadGenerator) MakeRequest(r *Request, debug bool) (*Request, bool) {
 	var payload *strings.Reader
 	var req *http.Request
 	var err error
-	if method == "POST" {
+	if method == "POST" || method == "PUT"{
 		payload = strings.NewReader(r.Body)
 		req, err = http.NewRequest(method, url, payload)
 	} else if method == "GET" {
@@ -120,7 +120,7 @@ func (lg *LoadGenerator) MakeRequest(r *Request, debug bool) (*Request, bool) {
 		panic(err)
 	}
 	if debug {
-		fmt.Println(method, url, r.Body, r.AuthRequired, res.StatusCode, r.Name)
+		fmt.Println(r.Type, method, url, r.Body, r.AuthRequired, res.StatusCode, r.Name)
 		if res.StatusCode == 400 {
 			b, _ := ioutil.ReadAll(res.Body)
 			fmt.Println(string(b))
