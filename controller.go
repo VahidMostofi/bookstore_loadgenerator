@@ -32,7 +32,7 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 	} else if r.URL.EscapedPath() == "/action" {
 
 	} else if r.URL.EscapedPath() == "/feedback" {
-		fmt.Println("feedback")
+		fmt.Println("feedback requested")
 		r := <-c.LoadGenerator.Result
 		go func(){c.LoadGenerator.Result <- r}()
 		b, e := json.Marshal(r)
@@ -41,6 +41,7 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(b)
+		fmt.Println("feedback sent")
 	} else if r.URL.EscapedPath() == "/prepare" {
 		host := r.URL.Query().Get("host")
 		if len(host) < 2 {
