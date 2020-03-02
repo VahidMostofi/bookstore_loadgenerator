@@ -92,7 +92,7 @@ func (lg *LoadGenerator) MakeRequest(r *Request, debug bool) (*Request, bool) {
 	var payload *strings.Reader
 	var req *http.Request
 	var err error
-	if method == "POST" || method == "PUT"{
+	if method == "POST" || method == "PUT" {
 		payload = strings.NewReader(r.Body)
 		req, err = http.NewRequest(method, url, payload)
 	} else if method == "GET" {
@@ -113,9 +113,10 @@ func (lg *LoadGenerator) MakeRequest(r *Request, debug bool) (*Request, bool) {
 		}
 		req.Header.Add("Authorization", "Bearer "+token)
 	}
-	r.Start = time.Now().Unix()
+	r.Start = time.Now().UnixNano() / 1e6
 	res, err := client.Do(req)
-	r.Finish = time.Now().Unix()
+	r.Finish = time.Now().UnixNano() / 1e6
+	fmt.Println(r.Type, r.Finish-r.Start)
 	if err != nil {
 		panic(err)
 	}

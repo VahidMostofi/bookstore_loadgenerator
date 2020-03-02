@@ -33,7 +33,8 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 
 	} else if r.URL.EscapedPath() == "/feedback" {
 		fmt.Println("feedback requested")
-		b, e := json.Marshal(r)
+		feedback := c.LoadGenerator.GetResult()
+		b, e := json.Marshal(feedback)
 		if e != nil {
 			panic(e)
 		}

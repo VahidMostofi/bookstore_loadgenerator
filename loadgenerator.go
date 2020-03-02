@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"strings"
 	"sync"
+
+	"github.com/montanaflynn/stats"
 )
 
 type ResponseHandler func(int, []byte) string
@@ -12,6 +15,8 @@ type ResponseHandler func(int, []byte) string
 type Results struct {
 	StatusCodesHist       map[int]int
 	AverageResponseTime   float64
+	Percentile95          float64
+	Percentile99          float64
 	TotalNumberOfRequests int
 	TestDuration          int64
 	RequestTypeHist       map[string]int
@@ -94,7 +99,7 @@ func (lg *LoadGenerator) PrepareLoad(numUsers int, alpha int) {
 	}
 
 	for u := 0; u < alpha*numUsers; u++ {
-		r := rand.Intn(50)
+		r := rand.Intn(1)
 		if r == 0 {
 			lg.RequestsQueue <- lg.GetLoginRequest(lg.Names[u%numUsers])
 		} else {
@@ -118,8 +123,10 @@ func (lg *LoadGenerator) GetStats() {
 	var totalResponseTime float64 = 0
 	results.StatusCodesHist = make(map[int]int)
 	results.RequestTypeHist = make(map[string]int)
+	responseTimes := make([]float64, 0)
 	for _, r := range lg.Requests {
-		responseTime := r.Finish - r.Start
+		responseTime := float64(r.Finish - r.Start)
+		responseTimes = append(responseTimes, responseTime)
 		totalResponseTime += float64(responseTime)
 
 		if count, ok := results.StatusCodesHist[r.StatusCode]; ok {
@@ -140,7 +147,27 @@ func (lg *LoadGenerator) GetStats() {
 	results.AverageResponseTime = totalResponseTime / float64(len(lg.Requests))
 	results.TestDuration = lastRequestTime - firstRequestTime
 	results.TotalNumberOfRequests = len(lg.Requests)
-
+	v, e := stats.Percentile(responseTimes, 95)
+	if e != nil {
+		// if errors.Is(e, stats.ErrBounds) {
+		// 	v = results.AverageResponseTime
+		// } else {
+		// 	panic(e)
+		// }
+		panic(e)
+	}
+	results.Percentile95 = v
+	v, e = stats.Percentile(responseTimes, 99)
+	if e != nil {
+		// if errors.Is(e, stats.ErrBounds) {
+		// 	v = results.AverageResponseTime
+		// } else {
+		// 	panic(e)
+		// }
+		panic(e)
+	}
+	fmt.Println(responseTimes)
+	results.Percentile99 = v
 	lg.result <- results
 }
 
