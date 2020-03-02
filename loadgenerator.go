@@ -40,7 +40,13 @@ type LoadGenerator struct {
 	BaseURL       string
 	TokensLock    sync.RWMutex
 	DoneWorkers   chan int
-	Result        chan *Results
+	result        chan *Results
+}
+
+func (l *LoadGenerator) GetResult() *Results {
+	r := <-l.result
+	go func() { l.result <- r }()
+	return r
 }
 
 func GetLoadGenerator(baseUrl string) *LoadGenerator {
@@ -54,7 +60,7 @@ func GetLoadGenerator(baseUrl string) *LoadGenerator {
 		TokensLock:    sync.RWMutex{},
 		Requests:      []*Request{},
 		DoneWorkers:   make(chan int, 100),
-		Result:        make(chan *Results),
+		result:        make(chan *Results),
 	}
 
 	lg.loadBooks()
@@ -68,7 +74,7 @@ func (lg *LoadGenerator) GenerateLoad(numWokers int) {
 		go lg.worker()
 	}
 
-	go func(){
+	go func() {
 		for r := range lg.Results {
 			lg.Requests = append(lg.Requests, r)
 			// fmt.Println(len(lg.Requests))
@@ -135,7 +141,7 @@ func (lg *LoadGenerator) GetStats() {
 	results.TestDuration = lastRequestTime - firstRequestTime
 	results.TotalNumberOfRequests = len(lg.Requests)
 
-	lg.Result <- results
+	lg.result <- results
 }
 
 func Log(content string) {
