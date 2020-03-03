@@ -7,15 +7,18 @@ import (
 	"strconv"
 )
 
+// Controller ...
 type Controller struct {
 	LoadGenerator *LoadGenerator
 }
 
+// GetController ...
 func GetController() *Controller {
 	c := Controller{}
 	return &c
 }
 
+// Handler ...
 func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.EscapedPath() == "/start" {
 		fmt.Println("start")
@@ -33,7 +36,7 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 
 	} else if r.URL.EscapedPath() == "/feedback" {
 		fmt.Println("feedback requested")
-		feedback := c.LoadGenerator.GetResult()
+		feedback := c.LoadGenerator.GetTestResult()
 		b, e := json.Marshal(feedback)
 		if e != nil {
 			panic(e)

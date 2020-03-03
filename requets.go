@@ -116,7 +116,7 @@ func (lg *LoadGenerator) MakeRequest(r *Request, debug bool) (*Request, bool) {
 	r.Start = time.Now().UnixNano() / 1e6
 	res, err := client.Do(req)
 	r.Finish = time.Now().UnixNano() / 1e6
-	fmt.Println(r.Type, r.Finish-r.Start)
+
 	if err != nil {
 		panic(err)
 	}

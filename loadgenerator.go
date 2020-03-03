@@ -10,18 +10,41 @@ import (
 	"github.com/montanaflynn/stats"
 )
 
+// ResponseHandler handles the result
 type ResponseHandler func(int, []byte) string
 
-type Results struct {
-	StatusCodesHist       map[int]int
-	AverageResponseTime   float64
-	Percentile95          float64
-	Percentile99          float64
+// TestResult Aggregates information about one workload test
+type TestResult struct {
 	TotalNumberOfRequests int
 	TestDuration          int64
-	RequestTypeHist       map[string]int
+	Requests              map[string]*RequestResult
+	ConcurrencyInfo       *ConcurrencyInfo
+	WorkerCount           int
+	Alpha                 int
+	UsersCount            int
+	Unit                  string
 }
 
+// RequestResult ...
+type RequestResult struct {
+	AverageResponseTime float64
+	Percentile95        float64
+	Percentile99        float64
+	Count               int
+	StatusCodesHist     map[int]int
+	responseTimes       []float64
+}
+
+// ConcurrencyInfo ...
+type ConcurrencyInfo struct {
+	MaxConcurrentRequestsInOneUnit     float64
+	Percentile95                       float64
+	Percentile99                       float64
+	AverageConcurrentRequestsInOneUnit float64
+	HowManyUnitsIsASecond              float64
+}
+
+// Request ...
 type Request struct {
 	Start        int64
 	Finish       int64
@@ -35,6 +58,7 @@ type Request struct {
 	Handle       ResponseHandler
 }
 
+// LoadGenerator ...
 type LoadGenerator struct {
 	Tokens        map[string]string
 	Names         []string
@@ -45,27 +69,33 @@ type LoadGenerator struct {
 	BaseURL       string
 	TokensLock    sync.RWMutex
 	DoneWorkers   chan int
-	result        chan *Results
+	result        chan *TestResult
+
+	NumUsers   int
+	NumWorkers int
+	Alpha      int
 }
 
-func (l *LoadGenerator) GetResult() *Results {
+// GetTestResult ....
+func (l *LoadGenerator) GetTestResult() *TestResult {
 	r := <-l.result
 	go func() { l.result <- r }()
 	return r
 }
 
-func GetLoadGenerator(baseUrl string) *LoadGenerator {
+// GetLoadGenerator ...
+func GetLoadGenerator(baseURL string) *LoadGenerator {
 	lg := &LoadGenerator{
 		Tokens:        make(map[string]string),
 		Names:         loadUsernames()[:1000],
 		Books:         []string{},
-		BaseURL:       baseUrl,
+		BaseURL:       baseURL,
 		RequestsQueue: make(chan *Request, 50000),
 		Results:       make(chan *Request, 500),
 		TokensLock:    sync.RWMutex{},
 		Requests:      []*Request{},
 		DoneWorkers:   make(chan int, 100),
-		result:        make(chan *Results),
+		result:        make(chan *TestResult),
 	}
 
 	lg.loadBooks()
@@ -73,69 +103,138 @@ func GetLoadGenerator(baseUrl string) *LoadGenerator {
 	return lg
 }
 
-func (lg *LoadGenerator) GenerateLoad(numWokers int) {
-	requestsCount := len(lg.RequestsQueue)
+// GenerateLoad ...
+func (l *LoadGenerator) GenerateLoad(numWokers int) {
+	l.NumWorkers = numWokers
+	requestsCount := len(l.RequestsQueue)
 	for w := 0; w < numWokers; w++ {
-		go lg.worker()
+		go l.worker()
 	}
 
 	go func() {
-		for r := range lg.Results {
-			lg.Requests = append(lg.Requests, r)
+		for r := range l.Results {
+			l.Requests = append(l.Requests, r)
 			// fmt.Println(len(lg.Requests))
-			if len(lg.Requests) == requestsCount {
-				close(lg.RequestsQueue)
+			if len(l.Requests) == requestsCount {
+				close(l.RequestsQueue)
 				break
 			}
 		}
-		lg.GetStats()
+		l.GetStats()
 	}()
 }
 
-func (lg *LoadGenerator) PrepareLoad(numUsers int, alpha int) {
-
+// PrepareLoad ...
+func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int) {
+	l.NumUsers = numUsers
+	l.Alpha = alpha
 	for u := 0; u < numUsers; u++ {
-		lg.RequestsQueue <- lg.GetLoginRequest(lg.Names[u])
+		l.RequestsQueue <- l.GetLoginRequest(l.Names[u])
 	}
 
 	for u := 0; u < alpha*numUsers; u++ {
-		r := rand.Intn(1)
+		r := rand.Intn(30)
 		if r == 0 {
-			lg.RequestsQueue <- lg.GetLoginRequest(lg.Names[u%numUsers])
+			l.RequestsQueue <- l.GetLoginRequest(l.Names[u%numUsers])
 		} else {
 			if r%2 == 0 {
-				bookID := lg.Books[rand.Intn(len(lg.Books))]
-				lg.RequestsQueue <- lg.GetGetBookRequest(lg.Names[u%numUsers], bookID)
+				bookID := l.Books[rand.Intn(len(l.Books))]
+				l.RequestsQueue <- l.GetGetBookRequest(l.Names[u%numUsers], bookID)
 			} else {
-				bookID := lg.Books[rand.Intn(len(lg.Books))]
-				lg.RequestsQueue <- lg.GetEditBookRequest(lg.Names[u%numUsers], bookID)
+				bookID := l.Books[rand.Intn(len(l.Books))]
+				l.RequestsQueue <- l.GetEditBookRequest(l.Names[u%numUsers], bookID)
 			}
 
 		}
 	}
 }
 
-func (lg *LoadGenerator) GetStats() {
-	var firstRequestTime = lg.Requests[0].Start
-	var lastRequestTime int64 = 0
+func (t *TestResult) addNewRequestType(typeName string) {
+	rr := &RequestResult{
+		StatusCodesHist: make(map[int]int),
+		responseTimes:   make([]float64, 0),
+	}
+	t.Requests[typeName] = rr
+}
 
-	var results *Results = &Results{}
-	var totalResponseTime float64 = 0
-	results.StatusCodesHist = make(map[int]int)
-	results.RequestTypeHist = make(map[string]int)
-	responseTimes := make([]float64, 0)
-	for _, r := range lg.Requests {
+func (t *TestResult) computeConcurrencyInfo(starts, ends []int64, firstRequestTime int64) {
+	if len(starts) != len(ends) {
+		panic(fmt.Errorf("starts and ends must have the same length"))
+	}
+	if len(starts) == 0 {
+		panic(fmt.Errorf("starts is empty"))
+	}
+	if t.TestDuration < 1 {
+		panic(fmt.Errorf("test duration is 0"))
+	}
+	t.ConcurrencyInfo = &ConcurrencyInfo{}
+
+	var unitConvertor int64 = 100
+	t.ConcurrencyInfo.HowManyUnitsIsASecond = float64(1000) / float64(unitConvertor)
+	fmt.Println(t.TestDuration, "t.TestDuration")
+	duration := int(t.TestDuration/unitConvertor) + int(1000/unitConvertor)
+	units := make([]float64, duration)
+
+	for i := 0; i < len(starts); i++ {
+		start := int((starts[i] - firstRequestTime) / unitConvertor)
+		end := int((ends[i] - firstRequestTime) / unitConvertor)
+		// fmt.Println(start, end)
+		for j := start; j < end; j++ {
+			units[j]++
+		}
+	}
+
+	v, e := stats.Max(units)
+	if e != nil {
+		panic(e)
+	}
+	t.ConcurrencyInfo.MaxConcurrentRequestsInOneUnit = v
+
+	v, e = stats.Mean(units)
+	if e != nil {
+		panic(e)
+	}
+	t.ConcurrencyInfo.AverageConcurrentRequestsInOneUnit = v
+
+	v, e = stats.Percentile(units, 95)
+	if e != nil {
+		panic(e)
+	}
+	t.ConcurrencyInfo.Percentile95 = v
+
+	v, e = stats.Percentile(units, 99)
+	if e != nil {
+		panic(e)
+	}
+	t.ConcurrencyInfo.Percentile99 = v
+}
+
+// GetStats ...
+func (l *LoadGenerator) GetStats() {
+	var firstRequestTime = l.Requests[0].Start
+	var lastRequestTime int64
+
+	starts := make([]int64, 0)
+	ends := make([]int64, 0)
+
+	testResult := &TestResult{Unit: "ms"}
+	testResult.Requests = make(map[string]*RequestResult)
+	for _, r := range l.Requests {
+		if _, ok := testResult.Requests[r.Type]; !ok {
+			testResult.addNewRequestType(r.Type)
+		}
 		responseTime := float64(r.Finish - r.Start)
-		responseTimes = append(responseTimes, responseTime)
-		totalResponseTime += float64(responseTime)
+		starts = append(starts, r.Start)
+		ends = append(ends, r.Finish)
+		testResult.Requests[r.Type].responseTimes = append(testResult.Requests[r.Type].responseTimes, responseTime)
 
-		if count, ok := results.StatusCodesHist[r.StatusCode]; ok {
-			results.StatusCodesHist[r.StatusCode] = count + 1
+		if count, ok := testResult.Requests[r.Type].StatusCodesHist[r.StatusCode]; ok {
+			testResult.Requests[r.Type].StatusCodesHist[r.StatusCode] = count + 1
 		} else {
-			results.StatusCodesHist[r.StatusCode] = 1
+			testResult.Requests[r.Type].StatusCodesHist[r.StatusCode] = 1
 		}
 
-		results.RequestTypeHist[r.Type]++
+		testResult.Requests[r.Type].Count++
 
 		if r.Start < firstRequestTime {
 			firstRequestTime = r.Start
@@ -144,51 +243,53 @@ func (lg *LoadGenerator) GetStats() {
 			lastRequestTime = r.Start
 		}
 	}
-	results.AverageResponseTime = totalResponseTime / float64(len(lg.Requests))
-	results.TestDuration = lastRequestTime - firstRequestTime
-	results.TotalNumberOfRequests = len(lg.Requests)
-	v, e := stats.Percentile(responseTimes, 95)
-	if e != nil {
-		// if errors.Is(e, stats.ErrBounds) {
-		// 	v = results.AverageResponseTime
-		// } else {
-		// 	panic(e)
-		// }
-		panic(e)
+	testResult.TestDuration = lastRequestTime - firstRequestTime
+	for _, result := range testResult.Requests {
+		testResult.TotalNumberOfRequests += result.Count
+
+		v, err := stats.Mean(result.responseTimes)
+		if err != nil {
+			panic(err)
+		}
+		result.AverageResponseTime = v
+
+		v, err = stats.Percentile(result.responseTimes, 95)
+		if err != nil {
+			panic(err)
+		}
+		result.Percentile95 = v
+
+		v, err = stats.Percentile(result.responseTimes, 99)
+		if err != nil {
+			panic(err)
+		}
+		result.Percentile99 = v
 	}
-	results.Percentile95 = v
-	v, e = stats.Percentile(responseTimes, 99)
-	if e != nil {
-		// if errors.Is(e, stats.ErrBounds) {
-		// 	v = results.AverageResponseTime
-		// } else {
-		// 	panic(e)
-		// }
-		panic(e)
-	}
-	fmt.Println(responseTimes)
-	results.Percentile99 = v
-	lg.result <- results
+	testResult.computeConcurrencyInfo(starts, ends, firstRequestTime)
+	l.result <- testResult
 }
 
+// Log ...
 func Log(content string) {
 
 }
 
-func (lg *LoadGenerator) GetToken(name string) string {
-	lg.TokensLock.RLock()
-	defer lg.TokensLock.RUnlock()
-	return lg.Tokens[name]
+// GetToken ...
+func (l *LoadGenerator) GetToken(name string) string {
+	l.TokensLock.RLock()
+	defer l.TokensLock.RUnlock()
+	return l.Tokens[name]
 }
 
-func (lg *LoadGenerator) WriteToken(name, token string) {
-	lg.TokensLock.Lock()
-	defer lg.TokensLock.Unlock()
-	if len(lg.Tokens[name]) > 4 {
+// WriteToken ...
+func (l *LoadGenerator) WriteToken(name, token string) {
+	l.TokensLock.Lock()
+	defer l.TokensLock.Unlock()
+	if len(l.Tokens[name]) > 4 {
 		return
 	}
 
-	lg.Tokens[name] = token
+	l.Tokens[name] = token
 }
 
 func loadUsernames() []string {
@@ -204,6 +305,7 @@ func loadUsernames() []string {
 	return names
 }
 
-func (lg *LoadGenerator) Stop() {
+// Stop ...
+func (l *LoadGenerator) Stop() {
 	panic("Implement THIS!")
 }
