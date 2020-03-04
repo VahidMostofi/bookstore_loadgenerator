@@ -126,6 +126,7 @@ func (l *LoadGenerator) GenerateLoad(numWokers int) {
 
 // PrepareLoad ...
 func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int) {
+	rand.Seed(8)
 	l.NumUsers = numUsers
 	l.Alpha = alpha
 	for u := 0; u < numUsers; u++ {
