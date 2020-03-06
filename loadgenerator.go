@@ -32,7 +32,7 @@ type RequestResult struct {
 	Percentile99        float64
 	Count               int
 	StatusCodesHist     map[int]int
-	responseTimes       []float64
+	ResponseTimes       []float64
 }
 
 // ConcurrencyInfo ...
@@ -153,7 +153,7 @@ func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int) {
 func (t *TestResult) addNewRequestType(typeName string) {
 	rr := &RequestResult{
 		StatusCodesHist: make(map[int]int),
-		responseTimes:   make([]float64, 0),
+		ResponseTimes:   make([]float64, 0),
 	}
 	t.Requests[typeName] = rr
 }
@@ -224,10 +224,10 @@ func (l *LoadGenerator) GetStats() {
 		if _, ok := testResult.Requests[r.Type]; !ok {
 			testResult.addNewRequestType(r.Type)
 		}
-		responseTime := float64(r.Finish - r.Start)
+		ResponseTime := float64(r.Finish - r.Start)
 		starts = append(starts, r.Start)
 		ends = append(ends, r.Finish)
-		testResult.Requests[r.Type].responseTimes = append(testResult.Requests[r.Type].responseTimes, responseTime)
+		testResult.Requests[r.Type].ResponseTimes = append(testResult.Requests[r.Type].ResponseTimes, ResponseTime)
 
 		if count, ok := testResult.Requests[r.Type].StatusCodesHist[r.StatusCode]; ok {
 			testResult.Requests[r.Type].StatusCodesHist[r.StatusCode] = count + 1
@@ -248,19 +248,19 @@ func (l *LoadGenerator) GetStats() {
 	for _, result := range testResult.Requests {
 		testResult.TotalNumberOfRequests += result.Count
 
-		v, err := stats.Mean(result.responseTimes)
+		v, err := stats.Mean(result.ResponseTimes)
 		if err != nil {
 			panic(err)
 		}
 		result.AverageResponseTime = v
 
-		v, err = stats.Percentile(result.responseTimes, 95)
+		v, err = stats.Percentile(result.ResponseTimes, 95)
 		if err != nil {
 			panic(err)
 		}
 		result.Percentile95 = v
 
-		v, err = stats.Percentile(result.responseTimes, 99)
+		v, err = stats.Percentile(result.ResponseTimes, 99)
 		if err != nil {
 			panic(err)
 		}
