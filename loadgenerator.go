@@ -23,6 +23,8 @@ type TestResult struct {
 	Alpha                 int
 	UsersCount            int
 	Unit                  string
+	StartTime             int64
+	FinishTime            int64
 }
 
 // RequestResult ...
@@ -33,6 +35,8 @@ type RequestResult struct {
 	Count               int
 	StatusCodesHist     map[int]int
 	ResponseTimes       []float64
+	StartTimes          []int64
+	EndTimes            []int64
 }
 
 // ConcurrencyInfo ...
@@ -154,6 +158,8 @@ func (t *TestResult) addNewRequestType(typeName string) {
 	rr := &RequestResult{
 		StatusCodesHist: make(map[int]int),
 		ResponseTimes:   make([]float64, 0),
+		StartTimes:      make([]int64, 0),
+		EndTimes:        make([]int64, 0),
 	}
 	t.Requests[typeName] = rr
 }
@@ -229,6 +235,9 @@ func (l *LoadGenerator) GetStats() {
 		ends = append(ends, r.Finish)
 		testResult.Requests[r.Type].ResponseTimes = append(testResult.Requests[r.Type].ResponseTimes, ResponseTime)
 
+		testResult.Requests[r.Type].StartTimes = append(testResult.Requests[r.Type].StartTimes, r.Start)
+		testResult.Requests[r.Type].EndTimes = append(testResult.Requests[r.Type].EndTimes, r.Finish)
+
 		if count, ok := testResult.Requests[r.Type].StatusCodesHist[r.StatusCode]; ok {
 			testResult.Requests[r.Type].StatusCodesHist[r.StatusCode] = count + 1
 		} else {
@@ -244,6 +253,8 @@ func (l *LoadGenerator) GetStats() {
 			lastRequestTime = r.Start
 		}
 	}
+	testResult.StartTime = firstRequestTime
+	testResult.FinishTime = lastRequestTime
 	testResult.TestDuration = lastRequestTime - firstRequestTime
 	for _, result := range testResult.Requests {
 		testResult.TotalNumberOfRequests += result.Count
