@@ -187,7 +187,7 @@ func (t *TestResult) computeConcurrencyInfo(starts, ends []int64, firstRequestTi
 		end := int((ends[i] - firstRequestTime) / unitConvertor)
 		// fmt.Println(start, end)
 		for j := start; j < end; j++ {
-			if j < len(units){
+			if j < len(units) {
 				units[j]++
 			}
 		}
