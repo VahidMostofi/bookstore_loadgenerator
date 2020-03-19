@@ -60,6 +60,7 @@ type Request struct {
 	AuthRequired bool
 	StatusCode   int
 	Handle       ResponseHandler
+	Record       bool
 }
 
 // LoadGenerator ...
@@ -131,7 +132,7 @@ func (l *LoadGenerator) GenerateLoad(numWokers int) {
 }
 
 // PrepareLoad ...
-func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fakeToken bool, seed int64) {
+func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fakeToken bool, seed int64, wrampUp float64) {
 	rand.Seed(seed)
 	l.NumUsers = numUsers
 	l.Alpha = alpha
@@ -140,25 +141,33 @@ func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fak
 
 	if l.LoginRatio >= 1 {
 		for u := 0; u < numUsers; u++ {
-			l.RequestsQueue <- l.GetLoginRequest(l.Names[u])
+			r := l.GetLoginRequest(l.Names[u])
+			r.Record = false
+			l.RequestsQueue <- r
 		}
 		l.LoginRatio--
 	}
+	nonRecordCount := int64(wrampUp * float64(alpha*numUsers))
 
 	for u := 0; u < alpha*numUsers; u++ {
 		r := rand.Intn(alpha)
+		var req *Request
 		if r < l.LoginRatio {
-			l.RequestsQueue <- l.GetLoginRequest(l.Names[u%numUsers])
+			req = l.GetLoginRequest(l.Names[u%numUsers])
 		} else {
 			if r%2 == 0 {
 				bookID := l.Books[rand.Intn(len(l.Books))]
-				l.RequestsQueue <- l.GetGetBookRequest(l.Names[u%numUsers], bookID)
+				req = l.GetGetBookRequest(l.Names[u%numUsers], bookID)
 			} else {
 				bookID := l.Books[rand.Intn(len(l.Books))]
-				l.RequestsQueue <- l.GetEditBookRequest(l.Names[u%numUsers], bookID)
+				req = l.GetEditBookRequest(l.Names[u%numUsers], bookID)
 			}
-
 		}
+		if nonRecordCount > 0 {
+			req.Record = false
+			nonRecordCount--
+		}
+		l.RequestsQueue <- req
 	}
 }
 
