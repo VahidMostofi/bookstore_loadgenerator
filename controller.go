@@ -60,9 +60,24 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(400)
 			return
 		}
-		fmt.Println("prepare", host, numUsers, alpha)
+		loginRatio, err := strconv.Atoi(r.URL.Query().Get("login"))
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		seed, err := strconv.Atoi(r.URL.Query().Get("seed"))
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		fakeToken, err := strconv.ParseBool(r.URL.Query().Get("fakeToken"))
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		fmt.Println("prepare", host, numUsers, alpha, loginRatio, fakeToken, seed)
 		c.LoadGenerator = GetLoadGenerator("http://" + host)
-		c.LoadGenerator.PrepareLoad(numUsers, alpha)
+		c.LoadGenerator.PrepareLoad(numUsers, alpha, loginRatio, fakeToken, int64(seed))
 		w.WriteHeader(200)
 	}
 }

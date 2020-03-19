@@ -60,6 +60,7 @@ type Request struct {
 	AuthRequired bool
 	StatusCode   int
 	Handle       ResponseHandler
+	Record       bool
 }
 
 // LoadGenerator ...
@@ -78,6 +79,8 @@ type LoadGenerator struct {
 	NumUsers   int
 	NumWorkers int
 	Alpha      int
+	LoginRatio int
+	FakeToken  bool
 }
 
 // GetTestResult ....
@@ -129,28 +132,42 @@ func (l *LoadGenerator) GenerateLoad(numWokers int) {
 }
 
 // PrepareLoad ...
-func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int) {
-	rand.Seed(8)
+func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fakeToken bool, seed int64, wrampUp float64) {
+	rand.Seed(seed)
 	l.NumUsers = numUsers
 	l.Alpha = alpha
-	for u := 0; u < numUsers; u++ {
-		l.RequestsQueue <- l.GetLoginRequest(l.Names[u])
+	l.LoginRatio = loginRatio
+	l.FakeToken = fakeToken
+
+	if l.LoginRatio >= 1 {
+		for u := 0; u < numUsers; u++ {
+			r := l.GetLoginRequest(l.Names[u])
+			r.Record = false
+			l.RequestsQueue <- r
+		}
+		l.LoginRatio--
 	}
+	nonRecordCount := int64(wrampUp * float64(alpha*numUsers))
 
 	for u := 0; u < alpha*numUsers; u++ {
-		r := rand.Intn(30)
-		if r == 0 {
-			l.RequestsQueue <- l.GetLoginRequest(l.Names[u%numUsers])
+		r := rand.Intn(alpha)
+		var req *Request
+		if r < l.LoginRatio {
+			req = l.GetLoginRequest(l.Names[u%numUsers])
 		} else {
 			if r%2 == 0 {
 				bookID := l.Books[rand.Intn(len(l.Books))]
-				l.RequestsQueue <- l.GetGetBookRequest(l.Names[u%numUsers], bookID)
+				req = l.GetGetBookRequest(l.Names[u%numUsers], bookID)
 			} else {
 				bookID := l.Books[rand.Intn(len(l.Books))]
-				l.RequestsQueue <- l.GetEditBookRequest(l.Names[u%numUsers], bookID)
+				req = l.GetEditBookRequest(l.Names[u%numUsers], bookID)
 			}
-
 		}
+		if nonRecordCount > 0 {
+			req.Record = false
+			nonRecordCount--
+		}
+		l.RequestsQueue <- req
 	}
 }
 
@@ -292,6 +309,9 @@ func Log(content string) {
 func (l *LoadGenerator) GetToken(name string) string {
 	l.TokensLock.RLock()
 	defer l.TokensLock.RUnlock()
+	if l.FakeToken {
+		return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0b3B0YWwuY29tIiwiZXhwIjoxNDI2NDIwODAwLCJodHRwOi8vdG9wdGFsLmNvbS9qd3RfY2xhaW1zL2lzX2FkbWluIjp0cnVlLCJjb21wYW55IjoiVG9wdGFsIiwiYXdlc29tZSI6dHJ1ZX0.yRQYnWzskCZUxPwaQupWkiUzKELZ49eM7oWxAQK_ZXw"
+	}
 	return l.Tokens[name]
 }
 
