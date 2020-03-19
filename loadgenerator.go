@@ -132,7 +132,7 @@ func (l *LoadGenerator) GenerateLoad(numWokers int) {
 }
 
 // PrepareLoad ...
-func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fakeToken bool, seed int64, wrampUp float64) {
+func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fakeToken bool, seed int64, warmUp float64) {
 	rand.Seed(seed)
 	l.NumUsers = numUsers
 	l.Alpha = alpha
@@ -147,7 +147,7 @@ func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fak
 		}
 		l.LoginRatio--
 	}
-	nonRecordCount := int64(wrampUp * float64(alpha*numUsers))
+	nonRecordCount := int64(warmUp * float64(alpha*numUsers))
 
 	for u := 0; u < alpha*numUsers; u++ {
 		r := rand.Intn(alpha)
@@ -166,6 +166,8 @@ func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fak
 		if nonRecordCount > 0 {
 			req.Record = false
 			nonRecordCount--
+		} else {
+			req.Record = true
 		}
 		l.RequestsQueue <- req
 	}
@@ -246,6 +248,9 @@ func (l *LoadGenerator) GetStats() {
 	testResult := &TestResult{Unit: "ms"}
 	testResult.Requests = make(map[string]*RequestResult)
 	for _, r := range l.Requests {
+		if !r.Record {
+			continue
+		}
 		if _, ok := testResult.Requests[r.Type]; !ok {
 			testResult.addNewRequestType(r.Type)
 		}

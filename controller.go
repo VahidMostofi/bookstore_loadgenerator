@@ -75,9 +75,14 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(400)
 			return
 		}
-		fmt.Println("prepare", host, numUsers, alpha, loginRatio, fakeToken, seed)
+		warmUp, err := strconv.ParseFloat(r.URL.Query().Get("warmUp"), 64)
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		fmt.Println("prepare", host, numUsers, alpha, loginRatio, fakeToken, seed, warmUp)
 		c.LoadGenerator = GetLoadGenerator("http://" + host)
-		c.LoadGenerator.PrepareLoad(numUsers, alpha, loginRatio, fakeToken, int64(seed))
+		c.LoadGenerator.PrepareLoad(numUsers, alpha, loginRatio, fakeToken, int64(seed), warmUp)
 		w.WriteHeader(200)
 	}
 }
