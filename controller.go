@@ -2,29 +2,47 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 )
 
 // Controller ...
 type Controller struct {
 	LoadGenerator *LoadGenerator
+	Logger        *log.Logger
 }
 
 // GetController ...
 func GetController() *Controller {
 	c := Controller{}
+	c.Logger = log.New(os.Stdout, "[CONTROLLER]", 2)
 	return &c
+}
+
+func (c *Controller) Log(msg string) {
+}
+
+// GetIP gets a requests IP address by reading off the forwarded-for
+// header (for proxies) and falls back to use the remote address.
+func GetIP(r *http.Request) string {
+	forwarded := r.Header.Get("X-FORWARDED-FOR")
+	if forwarded != "" {
+		return forwarded
+	}
+	return r.RemoteAddr
 }
 
 // Handler ...
 func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
+	ip := GetIP(r)
 	if r.URL.EscapedPath() == "/start" {
-		fmt.Println("start")
+		c.Logger.Printf("%s start\n", ip)
 		numWorkers, err := strconv.Atoi(r.URL.Query().Get("numWorkers"))
 		if err != nil {
 			w.WriteHeader(400)
+			return
 		}
 		c.LoadGenerator.GenerateLoad(numWorkers)
 		w.WriteHeader(200)
@@ -35,7 +53,7 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 	} else if r.URL.EscapedPath() == "/action" {
 
 	} else if r.URL.EscapedPath() == "/feedback" {
-		fmt.Println("feedback requested")
+		c.Logger.Printf("%s feedback requested\n", ip)
 		feedback := c.LoadGenerator.GetTestResult()
 		b, e := json.Marshal(feedback)
 		if e != nil {
@@ -43,7 +61,7 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(b)
-		fmt.Println("feedback sent")
+		c.Logger.Printf("%s feedback sent\n", ip)
 	} else if r.URL.EscapedPath() == "/prepare" {
 		host := r.URL.Query().Get("host")
 		if len(host) < 2 {
@@ -80,7 +98,8 @@ func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(400)
 			return
 		}
-		fmt.Println("prepare", host, numUsers, alpha, loginRatio, fakeToken, seed, warmUp)
+		c.Logger.Printf("%s prepare\n", ip)
+		// fmt.Println("prepare", host, numUsers, alpha, loginRatio, fakeToken, seed, warmUp)
 		c.LoadGenerator = GetLoadGenerator("http://" + host)
 		c.LoadGenerator.PrepareLoad(numUsers, alpha, loginRatio, fakeToken, int64(seed), warmUp)
 		w.WriteHeader(200)

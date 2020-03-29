@@ -121,7 +121,7 @@ func (l *LoadGenerator) GenerateLoad(numWokers int) {
 	go func() {
 		for r := range l.Results {
 			l.Requests = append(l.Requests, r)
-			// fmt.Println(len(lg.Requests))
+			// fmt.Print(len(l.Requests)," ")
 			if len(l.Requests) == requestsCount {
 				close(l.RequestsQueue)
 				break
@@ -197,7 +197,6 @@ func (t *TestResult) computeConcurrencyInfo(starts, ends []int64, firstRequestTi
 
 	var unitConvertor int64 = 100
 	t.ConcurrencyInfo.HowManyUnitsIsASecond = float64(1000) / float64(unitConvertor)
-	fmt.Println(t.TestDuration, "t.TestDuration")
 	duration := int(t.TestDuration/unitConvertor) + int(1000/unitConvertor)
 	units := make([]float64, duration)
 
