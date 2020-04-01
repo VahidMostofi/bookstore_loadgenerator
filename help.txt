@@ -1,0 +1,2 @@
+sudo docker build . -t bookstore_lg
+sudo docker run -p 7111:7111 --name bookstore_lg --restart always -d bookstore_lg
