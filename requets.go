@@ -163,5 +163,6 @@ func (lg *LoadGenerator) MakeRequest(r *Request, debug bool) (*Request, bool) {
 			lg.WriteToken(r.Name, token)
 		}
 	}
+	r.TraceID = strings.Split(res.Header.Get("traceid"), ":")[0]
 	return r, true
 }

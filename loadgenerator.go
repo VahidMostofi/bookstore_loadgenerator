@@ -35,8 +35,9 @@ type RequestResult struct {
 	Count               int
 	StatusCodesHist     map[int]int
 	ResponseTimes       []float64
-	StartTimes          []int64
-	EndTimes            []int64
+	StartTimes          []int64 `json:"-"`
+	EndTimes            []int64 `json:"-"`
+	TraceIds            []string
 }
 
 // ConcurrencyInfo ...
@@ -62,6 +63,7 @@ type Request struct {
 	Handle       ResponseHandler
 	Record       bool
 	ID           int
+	TraceID      string
 }
 
 // LoadGenerator ...
@@ -122,7 +124,7 @@ func (l *LoadGenerator) GenerateLoad(numWokers int) {
 	go func() {
 		for r := range l.Results {
 			l.Requests = append(l.Requests, r)
-			fmt.Println(len(l.Requests), requestsCount)
+			// fmt.Println(len(l.Requests), requestsCount)
 			if len(l.Requests) == requestsCount {
 				close(l.RequestsQueue)
 				break
@@ -180,6 +182,7 @@ func (t *TestResult) addNewRequestType(typeName string) {
 		ResponseTimes:   make([]float64, 0),
 		StartTimes:      make([]int64, 0),
 		EndTimes:        make([]int64, 0),
+		TraceIds:        make([]string, 0),
 	}
 	t.Requests[typeName] = rr
 }
@@ -261,6 +264,7 @@ func (l *LoadGenerator) GetStats() {
 
 		testResult.Requests[r.Type].StartTimes = append(testResult.Requests[r.Type].StartTimes, r.Start)
 		testResult.Requests[r.Type].EndTimes = append(testResult.Requests[r.Type].EndTimes, r.Finish)
+		testResult.Requests[r.Type].TraceIds = append(testResult.Requests[r.Type].TraceIds, r.TraceID)
 
 		if count, ok := testResult.Requests[r.Type].StatusCodesHist[r.StatusCode]; ok {
 			testResult.Requests[r.Type].StatusCodesHist[r.StatusCode] = count + 1
