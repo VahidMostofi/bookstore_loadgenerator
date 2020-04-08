@@ -61,6 +61,7 @@ type Request struct {
 	StatusCode   int
 	Handle       ResponseHandler
 	Record       bool
+	ID           int
 }
 
 // LoadGenerator ...
@@ -121,7 +122,7 @@ func (l *LoadGenerator) GenerateLoad(numWokers int) {
 	go func() {
 		for r := range l.Results {
 			l.Requests = append(l.Requests, r)
-			// fmt.Print(len(l.Requests)," ")
+			fmt.Println(len(l.Requests), requestsCount)
 			if len(l.Requests) == requestsCount {
 				close(l.RequestsQueue)
 				break

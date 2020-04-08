@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+var reqID = 0
+
 func (lg *LoadGenerator) GetLoginRequest(name string) *Request {
 	r := Request{
 		Method:       "POST",
@@ -19,7 +21,9 @@ func (lg *LoadGenerator) GetLoginRequest(name string) *Request {
 		Name:         name,
 		Type:         "login",
 		AuthRequired: false,
+		ID:           reqID,
 	}
+	reqID++
 	return &r
 }
 
@@ -32,7 +36,9 @@ func (lg *LoadGenerator) GetGetBookRequest(name string, bookId string) *Request 
 		Name:         name,
 		Type:         "getbook",
 		AuthRequired: true,
+		ID:           reqID,
 	}
+	reqID++
 	return &r
 }
 
@@ -45,7 +51,9 @@ func (lg *LoadGenerator) GetEditBookRequest(name string, bookId string) *Request
 		Name:         name,
 		Type:         "editbook",
 		AuthRequired: true,
+		ID:           reqID,
 	}
+	reqID++
 	return &r
 }
 
@@ -113,9 +121,16 @@ func (lg *LoadGenerator) MakeRequest(r *Request, debug bool) (*Request, bool) {
 		}
 		req.Header.Add("Authorization", "Bearer "+token)
 	}
+
+	if debug {
+		fmt.Println("ID", r.ID, r.Type)
+	}
 	r.Start = time.Now().UnixNano() / 1e6
 	res, err := client.Do(req)
 	r.Finish = time.Now().UnixNano() / 1e6
+	if debug {
+		fmt.Println("ID", -(r.ID))
+	}
 
 	if err != nil {
 		panic(err)
@@ -128,6 +143,9 @@ func (lg *LoadGenerator) MakeRequest(r *Request, debug bool) (*Request, bool) {
 		} else if res.StatusCode == 401 {
 			b, _ := ioutil.ReadAll(res.Body)
 			fmt.Println(r.Name, "this is token", len(token), token, string(b))
+		} else if res.StatusCode != 200 {
+			b, _ := ioutil.ReadAll(res.Body)
+			fmt.Println(res.StatusCode, string(b))
 		}
 	}
 	r.StatusCode = res.StatusCode
