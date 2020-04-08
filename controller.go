@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Controller ...
@@ -37,6 +38,12 @@ func GetIP(r *http.Request) string {
 // Handler ...
 func (c *Controller) Handler(w http.ResponseWriter, r *http.Request) {
 	ip := GetIP(r)
+	if !strings.HasPrefix(ip, "50.99.77.228"){
+		c.Logger.Printf("request came from: %s , rejected\n", ip)
+		w.WriteHeader(403)
+		return
+	}
+	// fmt.Println(ip)
 	if r.URL.EscapedPath() == "/start" {
 		c.Logger.Printf("%s start\n", ip)
 		numWorkers, err := strconv.Atoi(r.URL.Query().Get("numWorkers"))
