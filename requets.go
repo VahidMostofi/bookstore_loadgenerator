@@ -76,9 +76,13 @@ func (lg *LoadGenerator) loadBooks() {
 	if err != nil {
 		panic(err)
 	}
-	req.Header.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1ZTUxNTRmN2MzZGE0OTAwMTE3M2U3M2MiLCJpYXQiOjE1ODIzODg1NzZ9.D-iHOtrbJznER5lNc8Ta_lQmcJflqgqmmZdQXvdhMXo")
+	req.Header.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1ZTUxOGY4Njc0MzhkYTAwMjBmNTZjOWQiLCJpYXQiOjE1ODMzNzAxNTB9.7qokxb8xZxsW2k3SF8H9Cxj5XGZBP2JUSpDKpxxS6kI")
 
 	res, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	// fmt.Println("getbook.statusCode", res.StatusCode)
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
 

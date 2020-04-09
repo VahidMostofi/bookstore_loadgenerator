@@ -6,9 +6,14 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/montanaflynn/stats"
 )
+
+var warmUp int64 = 20
+var actual int64 = 40
+var waitTime int64 = 80
 
 // ResponseHandler handles the result
 type ResponseHandler func(int, []byte) string
@@ -35,8 +40,8 @@ type RequestResult struct {
 	Count               int
 	StatusCodesHist     map[int]int
 	ResponseTimes       []float64
-	StartTimes          []int64 `json:"-"`
-	EndTimes            []int64 `json:"-"`
+	StartTimes          []int64
+	EndTimes            []int64
 	TraceIds            []string
 }
 
@@ -120,12 +125,12 @@ func (l *LoadGenerator) GenerateLoad(numWokers int) {
 	for w := 0; w < numWokers; w++ {
 		go l.worker()
 	}
-
+	startTime := time.Now()
 	go func() {
 		for r := range l.Results {
 			l.Requests = append(l.Requests, r)
 			// fmt.Println(len(l.Requests), requestsCount)
-			if len(l.Requests) == requestsCount {
+			if len(l.Requests) == requestsCount || time.Now().After(startTime.Add(time.Second*time.Duration(waitTime))) {
 				close(l.RequestsQueue)
 				break
 			}
@@ -167,7 +172,7 @@ func (l *LoadGenerator) PrepareLoad(numUsers int, alpha int, loginRatio int, fak
 			}
 		}
 		if nonRecordCount > 0 {
-			req.Record = false
+			req.Record = true
 			nonRecordCount--
 		} else {
 			req.Record = true
@@ -250,13 +255,27 @@ func (l *LoadGenerator) GetStats() {
 
 	testResult := &TestResult{Unit: "ms"}
 	testResult.Requests = make(map[string]*RequestResult)
+	var startTime int64 = -1
 	for _, r := range l.Requests {
 		if !r.Record {
 			continue
 		}
+		if startTime == -1 {
+			startTime = r.Start
+			// fmt.Println(startTime)
+		}
+		if r.Start < startTime+warmUp*1000 {
+			continue
+		}
+		if r.Start > startTime+(warmUp+actual)*1000 {
+			// fmt.Println("breaking this loop")
+			// fmt.Println(r.Finish)
+			break
+		}
 		if _, ok := testResult.Requests[r.Type]; !ok {
 			testResult.addNewRequestType(r.Type)
 		}
+
 		ResponseTime := float64(r.Finish - r.Start)
 		starts = append(starts, r.Start)
 		ends = append(ends, r.Finish)
