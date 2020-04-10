@@ -13,7 +13,7 @@ import (
 
 var warmUp int64 = 20
 var actual int64 = 40
-var waitTime int64 = 80
+var waitTime int64 = 95
 
 // ResponseHandler handles the result
 type ResponseHandler func(int, []byte) string
